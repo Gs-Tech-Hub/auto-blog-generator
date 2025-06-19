@@ -36,6 +36,8 @@ RUN npm install
 
 # Install dependencies
 RUN npx puppeteer browsers install chrome
+
+COPY prisma ./prisma/
 RUN npx prisma generate --no-engine
 
 # Copy your app code
