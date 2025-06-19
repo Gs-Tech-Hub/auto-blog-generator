@@ -43,7 +43,7 @@ RUN npx prisma generate --no-engine
 # Copy your app code
 COPY . .
 
-EXPOSE 8080
+EXPOSE 5000
 
 # Start the app
 CMD ["npm", "start"]
