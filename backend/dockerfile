@@ -30,12 +30,18 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Install dependencies
+RUN npx puppeteer browsers install chrome
+RUN npx prisma generate --no-engine
+
 # Copy your app code
 COPY . .
 
-# Install dependencies
-RUN npm install
-RUN npx puppeteer browsers install chrome
+EXPOSE 8080
 
 # Start the app
 CMD ["npm", "start"]
