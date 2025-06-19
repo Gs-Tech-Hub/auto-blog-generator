@@ -1,3 +1,9 @@
+// Polyfill for crypto.getRandomValues in Node.js ESM
+import { webcrypto as crypto } from 'node:crypto';
+if (!globalThis.crypto) {
+  globalThis.crypto = crypto;
+}
+
 import cron from 'node-cron';
 import { generateAndPublish } from '../controllers/blogGeneratorController.js';
 import { PrismaClient } from '@prisma/client';
