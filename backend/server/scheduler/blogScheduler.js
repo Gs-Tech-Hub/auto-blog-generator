@@ -177,6 +177,13 @@ export function startBlogScheduler() {
                   }),
                 }
               );
+
+              // Immediately mark this keyword as published before moving to the next
+              await prisma.keyword.updateMany({
+                where: { keyword },
+                data: { published: true, publishedAt: new Date() }
+              });
+
               await prisma.siteConfig.updateMany({ where: { url: site.url, username: site.username }, data: { publishingAvailable: false } });
               await prisma.blogConfig.update({ where: { id: config.id }, data: { lastSiteIndex: siteIndex } });
             }
