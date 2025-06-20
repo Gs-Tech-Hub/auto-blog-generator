@@ -59,7 +59,6 @@ export async function scrapeWithPuppeteer(query, engine = 'google', options = {}
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
   const page = await browser.newPage();
@@ -85,10 +84,19 @@ export async function scrapeWithPuppeteer(query, engine = 'google', options = {}
   }
 
   try {
-    await page.waitForSelector(paaSelector, { timeout: 10000 });
+    await page.waitForSelector(paaSelector, { timeout: 30000 }); // Increased to 30 seconds
     console.log('✅ [Scrapper] PAA section found.');
-  } catch {
-    console.warn(`⚠️ [Scrapper] No related questions found or took too long to load.`);
+  } catch (err) {
+    if (engine === 'yahoo') {
+      console.warn(`⚠️ [Scrapper][Yahoo] No related questions found or took too long to load.`);
+      console.warn(`[Yahoo Debug] URL: ${searchUrl}`);
+      const pageContent = await page.content();
+      console.warn(`[Yahoo Debug] Page content length: ${pageContent.length}`);
+      // Optionally, log a snippet of the page content for inspection
+      console.warn(`[Yahoo Debug] Page content preview: ${pageContent.substring(0, 500)}`);
+    } else {
+      console.warn(`⚠️ [Scrapper] No related questions found or took too long to load.`);
+    }
   }
 
   // Extract Q/A pairs (generic for all engines, but Yahoo needs special handling)
