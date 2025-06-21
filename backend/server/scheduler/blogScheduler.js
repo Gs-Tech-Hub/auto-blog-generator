@@ -15,15 +15,17 @@ export function startBlogScheduler() {
     console.log(`[${scanStart.toISOString()}] 🕒 Scheduler scan started`);
     try {
       const now = new Date();
+      // Only fetch configs where hasRun is false
       const configs = await prisma.blogConfig.findMany({
         where: {
+          hasRun: false,
           OR: [
-            { hasRun: false },
             { scheduleTime: { lte: now } },
+            { scheduleTime: null }
           ],
         },
       });
-      console.log(`[${new Date().toISOString()}] Found ${configs.length} configs to process`);
+      console.log(`[${new Date().toISOString()}] Found ${configs.length} configs to process (hasRun: false)`);
       for (let index = 0; index < configs.length; index++) {
         const config = configs[index];
         console.log(`[${new Date().toISOString()}] Processing config ID: ${config.id || `config-${index + 1}`}`);
