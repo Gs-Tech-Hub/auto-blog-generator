@@ -1,9 +1,3 @@
-// Polyfill for crypto.getRandomValues in Node.js ESM
-import { webcrypto as crypto } from 'node:crypto';
-if (!globalThis.crypto) {
-  globalThis.crypto = crypto;
-}
-
 import cron from 'node-cron';
 import { generateAndPublish } from '../controllers/blogGeneratorController.js';
 import { PrismaClient } from '@prisma/client';
@@ -13,6 +7,8 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function startBlogScheduler() {
   cron.schedule('* * * * *', async () => {
+    const scanStart = new Date();
+    console.log(`[${scanStart.toISOString()}] 🕒 Scheduler scan started`);
     try {
       const now = new Date();
       const configs = await prisma.blogConfig.findMany({
@@ -23,8 +19,10 @@ export function startBlogScheduler() {
           ],
         },
       });
+      console.log(`[${new Date().toISOString()}] Found ${configs.length} configs to process`);
       for (let index = 0; index < configs.length; index++) {
         const config = configs[index];
+        console.log(`[${new Date().toISOString()}] Processing config ID: ${config.id || `config-${index + 1}`}`);
         const configId = config.id || `config-${index + 1}`;
         const exhaustAllKeywords = config.exhaustAllKeywords !== false;
         let shouldRun = false;
@@ -209,8 +207,9 @@ export function startBlogScheduler() {
           }
         }
       }
+      console.log(`[${new Date().toISOString()}] Scheduler scan finished`);
     } catch (err) {
-      console.error('❌ Scheduler error:', err.message);
+      console.error(`[${new Date().toISOString()}] ❌ Scheduler error:`, err.message);
     }
   });
   console.log('🕒 Blog scheduler running every minute...');
