@@ -21,7 +21,8 @@ export function LoginForm({ onLogin }) {
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem('token', data.token);
-        if (onLogin) onLogin(data.user);
+        // Set user object with id and email for consistent downstream use
+        if (onLogin) onLogin({ id: data.user.id, email: data.user.email });
       } else {
         setError(data.error || 'Login failed');
       }
@@ -65,7 +66,8 @@ export function RegisterForm({ onRegister }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setSuccess('Registration successful! You can now log in.');
-        if (onRegister) onRegister(data.user);
+        // Set user object with id and email for consistent downstream use
+        if (onRegister) onRegister({ id: data.user.id, email: data.user.email });
       } else {
         setError(data.error || 'Registration failed');
       }

@@ -1,10 +1,10 @@
 import prisma from '../database.js';
 import fs from 'fs';
-import path from 'path';
 import { generateBlogJSON } from '../../models/AI/openai-content-mo-four.js';
-import { convertBlogJSONToMarkdown } from '../../util/markdowncoonverter.js';
 import { publishToWordPress } from '../../publisher/wp-publisher.js';
 import express from 'express';
+import { getAllKeywords } from '../database.js';
+import { generateAndPublishService } from '../services/blogGeneratorService.js';
 
 const router = express.Router();
 
@@ -12,68 +12,76 @@ const ensureDir = (dir) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 };
 
+// Consolidated generateAndPublish (used by both scheduler and API)
 export async function generateAndPublish(req, res) {
-  const configPath = path.join('config', 'blog-config.json');
-
   try {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const {
-      sites,
-      keywords,
-      links,
-      tags,
-      topics,
-      autoTitle,
-      articleCount,
-    } = config;
-
-    ensureDir('output');
-
-    const results = [];
-
-    for (let i = 0; i < articleCount; i++) {
-      const keyword = keywords[i % keywords.length];
-      const link = links[i % links.length];
-      const topic = topics[i % topics.length] || `Topic for "${keyword}"`;
-      const title = autoTitle ? `${keyword} - Expert Insight` : topic;
-
-      const blogJSON = await generateBlogJSON({ title, keyword, link });
-      const blogFileName = `blog-${Date.now()}-${i + 1}`;
-
-      fs.writeFileSync(`output/${blogFileName}.json`, JSON.stringify(blogJSON, null, 2), 'utf-8');
-
-      const markdown = convertBlogJSONToMarkdown(blogJSON);
-      fs.writeFileSync(`output/${blogFileName}.md`, markdown, 'utf-8');
-
-      const publishResults = [];
-      for (const site of sites) {
-        const response = await publishToWordPress(blogJSON, site);
-        publishResults.push({ site: site.url, response });
-      }
-
-      results.push({
-        title,
-        file: `${blogFileName}.json`,
-        publishResults,
-      });
-    }
-
-    res.status(200).json({ success: true, results });
+    // Always treat req.body as the full, sanitized config
+    const parsedConfig = {
+      ...req.body,
+      sites: typeof req.body.sites === 'string' ? JSON.parse(req.body.sites) : req.body.sites,
+      links: typeof req.body.links === 'string' ? JSON.parse(req.body.links) : req.body.links,
+      tags: typeof req.body.tags === 'string' ? JSON.parse(req.body.tags) : req.body.tags,
+      topics: typeof req.body.topics === 'string' ? JSON.parse(req.body.topics) : req.body.topics,
+      contentSource: req.body.contentSource || 'openai',
+      engine: req.body.engine || undefined,
+    };
+    // Call service with parsed config
+    const result = await generateAndPublishService(parsedConfig);
+    res.status(200).json({ success: true, ...result });
   } catch (err) {
-    console.error('❌ Error:', err.message);
+    console.error('❌ Error in generateAndPublish:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
+// Bulk save keywords API
+router.post('/bulk-save-keywords', async (req, res) => {
+  try {
+    const { keywords, scheduledTime, userId } = req.body;
+    if (!Array.isArray(keywords)) {
+      return res.status(400).json({ success: false, error: 'Missing keywords' });
+    }
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Missing userId' });
+    }
+    // Save keywords using Prisma
+    const created = await Promise.all(keywords.map(keyword =>
+      prisma.keyword.create({ data: { keyword, published: false, publishedOn: [], userId, configId: null, createdAt: new Date(), updatedAt: new Date(), scheduledTime: scheduledTime ? new Date(scheduledTime) : null } })
+    ));
+    res.status(200).json({ success: true, message: 'Keywords saved.', created });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API to get count of unpublished keywords for a site
+router.get('/unpublished-keywords-count', async (req, res) => {
+  try {
+    const count = await prisma.keyword.count({ where: { published: false } });
+    res.status(200).json({ success: true, count });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API to get all saved keywords
+router.get('/all-keywords', async (req, res) => {
+  try {
+    const keywords = await getAllKeywords();
+    res.status(200).json({ success: true, keywords });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/published-posts (get all published articles)
 router.get('/published-posts', async (req, res) => {
   try {
-    // Fetch all articles (optionally filter by publishedAt or other logic if needed)
+    const userId = req.user.userId;
     const articles = await prisma.article.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: {
-        user: { select: { id: true, email: true, name: true } }
-      }
+      include: { user: { select: { id: true, email: true, name: true } } }
     });
     // Format for frontend
     const posts = articles.map(article => ({
@@ -88,6 +96,28 @@ router.get('/published-posts', async (req, res) => {
       user: article.user,
     }));
     res.status(200).json({ success: true, posts });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Example: Get all blog configs for the authenticated user
+router.get('/blog-configs', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const configs = await prisma.blogConfig.findMany({ where: { userId } });
+    res.status(200).json({ success: true, configs });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Example: Get all articles for the authenticated user
+router.get('/articles', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const articles = await prisma.article.findMany({ where: { userId } });
+    res.status(200).json({ success: true, articles });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

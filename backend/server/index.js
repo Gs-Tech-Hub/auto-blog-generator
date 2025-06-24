@@ -6,7 +6,6 @@ import bodyParser from 'body-parser';
 import configRoutes from './routes/configController.js';
 import authRoutes, { requireAuth } from './routes/auth.js';
 import blogRoutes from './routes/blogController.js';
-import blogGeneratorController from './controllers/blogGeneratorController.js';
 import { startBlogScheduler } from './scheduler/blogScheduler.js';
 
 dotenv.config();
@@ -23,7 +22,6 @@ startBlogScheduler(app);
 app.use('/api/auth', authRoutes);
 app.use('/api', configRoutes);
 app.use('/api', blogRoutes);
-app.use('/api', blogGeneratorController);
 
 // Protect all /api routes except /api/auth/*
 app.use('/api', (req, res, next) => {

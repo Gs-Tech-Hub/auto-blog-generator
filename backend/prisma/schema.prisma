@@ -21,6 +21,7 @@ model User {
   siteConfigs  SiteConfig[]
   blogConfigs  BlogConfig[]
   keywords     Keyword[]
+  publications Publication[] // <-- Added relation field
 }
 
 model BlogConfig {
@@ -64,6 +65,7 @@ model SiteConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   publishingAvailable Boolean @default(true)
+  publications Publication[] // <-- Added relation field
 
   @@unique([url, username])
 }
@@ -79,6 +81,7 @@ model Article {
   publishedUrl String? // New: The URL of the published blog post
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  publications Publication[] // <-- Added relation field
 }
 
 model Keyword {
@@ -94,4 +97,19 @@ model Keyword {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   scheduledTime DateTime? // Optional: when this keyword should be published
+}
+
+model Publication {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id])
+  articleId    Int
+  article      Article   @relation(fields: [articleId], references: [id])
+  siteConfigId Int
+  siteConfig   SiteConfig @relation(fields: [siteConfigId], references: [id])
+  publishedUrl String
+  status       String    @default("published") // e.g., published, failed, draft
+  publishedAt  DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

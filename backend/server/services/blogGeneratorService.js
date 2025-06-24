@@ -222,10 +222,21 @@ export async function generateAndPublishService(resources) {
     const wpRes = await publishToWordPress(publishPayload, selectedSite);
     const url = wpRes.link || null;
     await prisma.article.update({
-      where: { id: dbArticle.id },
+      where: { id: dbArticle.id, userId },
       data: {
         siteUrl: selectedSite.url,
         publishedUrl: url
+      }
+    });
+    // Create a Publication record (user-based)
+    await prisma.publication.create({
+      data: {
+        userId: userId,
+        articleId: dbArticle.id,
+        siteConfigId: selectedSite.id || null, // Ensure siteConfigId is available
+        publishedUrl: url,
+        status: 'published',
+        publishedAt: new Date(),
       }
     });
     articles.push({

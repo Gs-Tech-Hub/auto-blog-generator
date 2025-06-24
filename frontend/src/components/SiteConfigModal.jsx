@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase }) => {
+const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase, user }) => {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -22,7 +22,8 @@ const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase }) => {
       });
       const data = await res.json();
       if (data.success) {
-        setSites(data.siteConfigs);
+        // Only show sites for the current user
+        setSites(Array.isArray(data.siteConfigs) ? data.siteConfigs.filter(site => site.userId === user?.id) : []);
       } else {
         setError('Failed to load site configs');
       }
@@ -38,7 +39,7 @@ const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase }) => {
   };
 
   const addSite = () => {
-    setSites(prev => [...prev, { url: '', username: '', password: '' }]);
+    setSites(prev => [...prev, { url: '', username: '', password: '', userId: user?.id }]);
   };
 
   const removeSite = (idx) => {
@@ -52,13 +53,15 @@ const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase }) => {
     setSuccess(null);
     try {
       const token = localStorage.getItem('token');
+      // Ensure userId is included for each site
+      const userSites = sites.map(site => ({ ...site, userId: user?.id }));
       const res = await fetch(`${apiBase}/save-site-configs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ sites }),
+        body: JSON.stringify({ sites: userSites }),
       });
       const data = await res.json();
       if (!data.success) {

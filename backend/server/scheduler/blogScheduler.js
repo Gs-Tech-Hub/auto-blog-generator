@@ -3,7 +3,7 @@ if (!globalThis.crypto) {
   globalThis.crypto = crypto;
 }
 import cron from 'node-cron';
-import { generateAndPublish } from '../controllers/blogGeneratorController.js';
+import { generateAndPublish } from '../routes/blogController.js';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -16,6 +16,8 @@ export function startBlogScheduler() {
     try {
       const now = new Date();
       // Only fetch configs where hasRun is false
+      // Example: If running scheduler per user, fetch configs like this:
+      // const configs = await prisma.blogConfig.findMany({ where: { userId, hasRun: false, ... } });
       const configs = await prisma.blogConfig.findMany({
         where: {
           hasRun: false,

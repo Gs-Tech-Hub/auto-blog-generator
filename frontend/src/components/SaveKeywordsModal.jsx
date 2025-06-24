@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const SaveKeywordsModal = ({ isOpen, onClose, selectedSite, apiBase }) => {
+const SaveKeywordsModal = ({ isOpen, onClose, selectedSite, apiBase, user }) => {
   const [keywords, setKeywords] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,14 +20,15 @@ const SaveKeywordsModal = ({ isOpen, onClose, selectedSite, apiBase }) => {
         setLoading(false);
         return;
       }
-      const token = localStorage.getItem('token');
-      // Get userId from token (decode JWT)
-      let userId = null;
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          userId = payload.userId;
-        } catch {}
+      let userId = user?.id;
+      if (!userId) {
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            userId = payload.userId;
+          } catch {}
+        }
       }
       if (!userId) {
         setError('User not authenticated. Please log in again.');
@@ -38,7 +39,7 @@ const SaveKeywordsModal = ({ isOpen, onClose, selectedSite, apiBase }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
           keywords: keywordsArr,

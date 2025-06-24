@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-const BlogForm = ({ selectedSites = [], contentSource: initialContentSource = 'openai', engine: initialEngine = 'google' }) => {
+const BlogForm = ({ user, selectedSites = [], contentSource: initialContentSource = 'openai', engine: initialEngine = 'google' }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [links, setLinks] = useState('');
@@ -74,6 +74,7 @@ const BlogForm = ({ selectedSites = [], contentSource: initialContentSource = 'o
         inArticleArr = inArticleKeywordsInput.split(',').map(k => k.trim()).filter(Boolean).slice(0, 3);
       }
       const payload = {
+        userId: user?.id, // Attach userId to payload
         sites: selectedSites.map(site => ({ url: site.url, username: site.username })),
         links: links.split(',').map(l => l.trim()).filter(Boolean),
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),

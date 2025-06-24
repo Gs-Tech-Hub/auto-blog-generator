@@ -3,11 +3,21 @@ import prisma from '../database.js';
 
 const router = express.Router();
 
+// Middleware to require authentication and set req.user.userId
+router.use((req, res, next) => {
+  // Example: req.user should be set by authentication middleware (e.g., JWT)
+  // If not present, reject the request
+  if (!req.user || !req.user.userId) {
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  }
+  next();
+});
+
 // POST /api/save-config (create new blog config)
 router.post('/save-config', async (req, res) => {
   try {
     const config = req.body;
-    const userId = req.user?.userId || config.userId || 1; // Use userId from token if available
+    const userId = req.user.userId;
     // Save config to BlogConfig table
     let publishIntervalMinutes = null;
     let scheduleTime = null;
@@ -42,7 +52,6 @@ router.post('/save-config', async (req, res) => {
     }
     let exhaustAllKeywords = config.exhaustAllKeywords;
     if (config.contentSource === 'openai') {
-      // Only allow if user explicitly set, otherwise default to false
       exhaustAllKeywords = config.exhaustAllKeywords === true;
     } else if (exhaustAllKeywords === undefined) {
       exhaustAllKeywords = true;
@@ -80,21 +89,23 @@ router.post('/save-config', async (req, res) => {
   }
 });
 
-// GET /api/configs (get all blog configs)
+// GET /api/configs (get all blog configs for user)
 router.get('/configs', async (req, res) => {
   try {
-    const configs = await prisma.blogConfig.findMany();
+    const userId = req.user.userId;
+    const configs = await prisma.blogConfig.findMany({ where: { userId } });
     res.status(200).json({ success: true, configs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// GET /api/config/:id (get a single config)
+// GET /api/config/:id (get a single config for user)
 router.get('/config/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const config = await prisma.blogConfig.findUnique({ where: { id: Number(id) } });
+    const userId = req.user.userId;
+    const config = await prisma.blogConfig.findFirst({ where: { id: Number(id), userId } });
     if (!config) {
       return res.status(404).json({ success: false, error: 'Config not found' });
     }
@@ -104,35 +115,37 @@ router.get('/config/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/delete-published/:id (delete a published blog config by id)
+// DELETE /api/delete-published/:id (delete a published blog config by id for user)
 router.delete('/delete-published/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.blogConfig.delete({ where: { id: Number(id) } });
+    const userId = req.user.userId;
+    await prisma.blogConfig.deleteMany({ where: { id: Number(id), userId } });
     res.status(200).json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// DELETE /api/delete-all-published (delete all published blog configs)
+// DELETE /api/delete-all-published (delete all published blog configs for user)
 router.delete('/delete-all-published', async (req, res) => {
   try {
-    await prisma.blogConfig.deleteMany({});
+    const userId = req.user.userId;
+    await prisma.blogConfig.deleteMany({ where: { userId } });
     res.status(200).json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// SiteConfig CRUD (example: add more as needed)
-// POST /api/save-site (add a new site config to DB)
+// SiteConfig CRUD (user-based)
+// POST /api/save-site (add a new site config to DB for user)
 router.post('/save-site', async (req, res) => {
   try {
-    const { name, url } = req.body;
-    const userId = req.user?.userId || req.body.userId || 1;
+    const { name, url, username, password } = req.body;
+    const userId = req.user.userId;
     const site = await prisma.siteConfig.create({
-      data: { name, url, userId },
+      data: { name, url, username, password, userId },
     });
     res.status(200).json({ success: true, site });
   } catch (err) {
@@ -140,34 +153,37 @@ router.post('/save-site', async (req, res) => {
   }
 });
 
-// GET /api/sites (get all site configs from DB)
+// GET /api/sites (get all site configs for user)
 router.get('/sites', async (req, res) => {
   try {
-    const sites = await prisma.siteConfig.findMany();
+    const userId = req.user.userId;
+    const sites = await prisma.siteConfig.findMany({ where: { userId } });
     res.status(200).json({ success: true, sites });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// GET /api/site-configs (fetch all site configs from DB)
+// GET /api/site-configs (fetch all site configs for user)
 router.get('/site-configs', async (req, res) => {
   try {
-    const siteConfigs = await prisma.siteConfig.findMany();
-    res.status(200).json({ success: true, siteConfigs });
+    const userId = req.user.userId;
+    const configs = await prisma.siteConfig.findMany({ where: { userId } });
+    res.status(200).json({ success: true, configs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST /api/save-site-configs (save or update multiple site configs)
+// POST /api/save-site-configs (save or update multiple site configs for user)
 router.post('/save-site-configs', async (req, res) => {
   try {
     const { sites } = req.body;
+    const userId = req.user.userId;
     if (!Array.isArray(sites)) {
       return res.status(400).json({ success: false, error: 'Sites must be an array' });
     }
-    // Upsert each site config (by url+username)
+    // Upsert each site config (by url+username+userId)
     const results = [];
     for (const site of sites) {
       if (!site.url || !site.username) continue;
@@ -180,14 +196,14 @@ router.post('/save-site-configs', async (req, res) => {
         },
         update: {
           password: site.password,
-          name: site.name || site.url // fallback to url if name not provided
+          name: site.name || site.url
         },
         create: {
           url: site.url,
           username: site.username,
           password: site.password,
-          name: site.name || site.url, // fallback to url if name not provided
-          userId: req.user?.userId || 1
+          name: site.name || site.url,
+          userId
         }
       });
       results.push(upserted);

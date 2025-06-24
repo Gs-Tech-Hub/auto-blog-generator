@@ -6,7 +6,7 @@ import SaveKeywordsModal from './SaveKeywordsModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-const LandingPage = () => {
+const LandingPage = ({ user }) => {
   const [siteConfigs, setSiteConfigs] = useState([]);
   const [showSiteConfigModal, setShowSiteConfigModal] = useState(false);
   const [showSaveKeywordsModal, setShowSaveKeywordsModal] = useState(false);
@@ -21,11 +21,11 @@ const LandingPage = () => {
       const data = await response.json();
       let sitesArray = [];
       if (Array.isArray(data.siteConfigs)) {
-        sitesArray = data.siteConfigs.filter(site => site && typeof site === 'object' && site.url && site.username);
+        sitesArray = data.siteConfigs.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
       } else if (Array.isArray(data.sites)) {
-        sitesArray = data.sites.filter(site => site && typeof site === 'object' && site.url && site.username);
+        sitesArray = data.sites.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
       } else if (Array.isArray(data)) {
-        sitesArray = data.filter(site => site && typeof site === 'object' && site.url && site.username);
+        sitesArray = data.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
       }
       setSiteConfigs(sitesArray);
       if (sitesArray.length === 1) {
