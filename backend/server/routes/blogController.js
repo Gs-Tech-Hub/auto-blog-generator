@@ -51,17 +51,19 @@ router.post('/bulk-save-keywords', async (req, res) => {
 // API to get count of unpublished keywords for a site
 router.get('/unpublished-keywords-count', async (req, res) => {
   try {
-    const count = await prisma.keyword.count({ where: { published: false } });
+    const userId = req.user.userId;
+    const count = await prisma.keyword.count({ where: { published: false, userId } });
     res.status(200).json({ success: true, count });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// API to get all saved keywords
+// API to get all saved keywords for the authenticated user
 router.get('/all-keywords', async (req, res) => {
   try {
-    const keywords = await getAllKeywords();
+    const userId = req.user.userId;
+    const keywords = await prisma.keyword.findMany({ where: { userId } });
     res.status(200).json({ success: true, keywords });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

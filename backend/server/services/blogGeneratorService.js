@@ -38,7 +38,7 @@ export async function generateAndPublishService(resources) {
     contentSource = 'openai',
     engine = 'google',
     autoTitle = true,
-    userId = 1,
+    userId = 1, // <-- userId is always present
     ...rest
   } = resources;
 

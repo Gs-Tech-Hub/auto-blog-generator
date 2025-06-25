@@ -86,8 +86,8 @@ export function startBlogScheduler() {
 
         // --- Keyword Publishing Logic ---
         // Only publish one keyword per interval
-        const unpublishedKeywords = await prisma.keyword.findMany({ where: { published: false } });
-        const allKeywords = await prisma.keyword.findMany();
+        const unpublishedKeywords = await prisma.keyword.findMany({ where: { published: false, userId: config.userId } });
+        const allKeywords = await prisma.keyword.findMany({ where: { userId: config.userId } });
         if (unpublishedKeywords.length === 0) {
           if (!config.hasRun && allKeywords.length > 0) {
             await prisma.blogConfig.update({ where: { id: config.id }, data: { hasRun: true, status: 'finished', finishedAt: new Date() } });

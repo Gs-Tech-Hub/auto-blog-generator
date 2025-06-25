@@ -68,7 +68,7 @@ const KeywordsPage = () => {
                   <td className="border px-2 py-1">{kw.keyword}</td>
                   {/* <td className="border px-2 py-1">{kw.site}</td> */}
                   <td className="border px-2 py-1">{kw.published ? 'Yes' : 'No'}</td>
-                  <td className="border px-2 py-1">{kw.scheduled_time || '-'}</td>
+                  <td className="border px-2 py-1">{kw.scheduledTime ? kw.scheduledTime : '-'}</td>
                 </tr>
               ))}
             </tbody>
