@@ -1,7 +1,8 @@
 import prisma from '../database.js';
 import express from 'express';
 import { getAllKeywords } from '../database.js';
-import { addBlogJob } from '../jobQueue.js';
+// import { addBlogJob } from '../jobQueue.js'; // Redis disabled, see below
+import { generateAndPublishService } from '../services/blogGeneratorService.js';
 
 const router = express.Router();
 
@@ -18,9 +19,9 @@ export async function generateAndPublish(req, res) {
       contentSource: req.body.contentSource || 'openai',
       engine: req.body.engine || undefined,
     };
-    // Instead of calling the service directly, add to job queue
-    await addBlogJob(parsedConfig);
-    res.status(202).json({ success: true, message: 'Job queued for processing.' });
+    // Redis/BullMQ disabled: call the service directly
+    await generateAndPublishService(parsedConfig);
+    res.status(202).json({ success: true, message: 'Blog generated and published.' });
   } catch (err) {
     console.error('❌ Error in generateAndPublish:', err.message);
     res.status(500).json({ success: false, error: err.message });

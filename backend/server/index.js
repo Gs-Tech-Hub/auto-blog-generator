@@ -9,8 +9,8 @@ import blogRoutes from './routes/blogController.js';
 import { startBlogScheduler } from './scheduler/blogScheduler.js';
 import { registerGlobalHandlers } from './globalHandlers.js';
 import { closeLastBrowser } from '../models/scrappers/scrapperBot.js';
-import { startBlogJobWorker } from './jobQueue.js';
-import { generateAndPublishService } from './services/blogGeneratorService.js';
+// import { startBlogJobWorker } from './jobQueue.js'; // Redis disabled
+// import { generateAndPublishService } from './services/blogGeneratorService.js';
 
 dotenv.config();
 
@@ -41,8 +41,8 @@ registerGlobalHandlers({
   },
 });
 
-// Start BullMQ worker for blog jobs
-startBlogJobWorker(generateAndPublishService);
+// Redis/BullMQ worker disabled. To re-enable, restore the import and call below.
+// startBlogJobWorker(generateAndPublishService);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
