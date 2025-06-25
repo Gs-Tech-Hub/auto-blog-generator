@@ -20,6 +20,9 @@ puppeteer.use(
   })
 );
 
+// Track the last launched browser for global cleanup
+let lastBrowser = null;
+
 // Utility to handle different search engines
 function getEngineConfig(engine, query) {
   switch (engine) {
@@ -57,132 +60,159 @@ export async function scrapeWithPuppeteer(query, engine = 'google', options = {}
 
   const { searchUrl, paaSelector } = getEngineConfig(engine, query);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  let browser;
+  let page;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    lastBrowser = browser;
+    page = await browser.newPage();
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36'
+    );
+    console.log(`🌐 Navigating to: ${searchUrl}`);
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
 
-  const page = await browser.newPage();
-
-  await page.setUserAgent(
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36'
-  );
-
-  console.log(`🌐 Navigating to: ${searchUrl}`);
-  await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
-
-  // --- AUTO CAPTCHA HANDLING ---
-  if (page.solveRecaptchas) {
-    const { captchas, solved, error } = await page.solveRecaptchas();
-    if (captchas && captchas.length > 0) {
-      if (error) {
-        console.warn('⚠️ CAPTCHA solve error:', error);
-      } else {
-        console.log(`✅ Solved ${solved.length} CAPTCHA(s).`);
-        await page.reload({ waitUntil: 'domcontentloaded' });
+    // --- AUTO CAPTCHA HANDLING ---
+    if (page.solveRecaptchas) {
+      const { captchas, solved, error } = await page.solveRecaptchas();
+      if (captchas && captchas.length > 0) {
+        if (error) {
+          console.warn('⚠️ CAPTCHA solve error:', error);
+        } else {
+          console.log(`✅ Solved ${solved.length} CAPTCHA(s).`);
+          await page.reload({ waitUntil: 'domcontentloaded' });
+        }
       }
     }
-  }
 
-  try {
-    await page.waitForSelector(paaSelector, { timeout: 30000 }); // Increased to 30 seconds
-    console.log('✅ [Scrapper] PAA section found.');
-  } catch (err) {
+    try {
+      await page.waitForSelector(paaSelector, { timeout: 30000 }); // Increased to 30 seconds
+      console.log('✅ [Scrapper] PAA section found.');
+    } catch (err) {
+      if (engine === 'yahoo') {
+        console.warn(`⚠️ [Scrapper][Yahoo] No related questions found or took too long to load.`);
+        console.warn(`[Yahoo Debug] URL: ${searchUrl}`);
+        const pageContent = await page.content();
+        console.warn(`[Yahoo Debug] Page content length: ${pageContent.length}`);
+        // Optionally, log a snippet of the page content for inspection
+        console.warn(`[Yahoo Debug] Page content preview: ${pageContent.substring(0, 500)}`);
+      } else {
+        console.warn(`⚠️ [Scrapper] No related questions found or took too long to load.`);
+      }
+    }
+
+    // Extract Q/A pairs (generic for all engines, but Yahoo needs special handling)
+    let expandAndScrape;
     if (engine === 'yahoo') {
-      console.warn(`⚠️ [Scrapper][Yahoo] No related questions found or took too long to load.`);
-      console.warn(`[Yahoo Debug] URL: ${searchUrl}`);
-      const pageContent = await page.content();
-      console.warn(`[Yahoo Debug] Page content length: ${pageContent.length}`);
-      // Optionally, log a snippet of the page content for inspection
-      console.warn(`[Yahoo Debug] Page content preview: ${pageContent.substring(0, 500)}`);
+      expandAndScrape = await extractYahooQA(page);
+    } else if (engine === 'google') {
+      expandAndScrape = await extractGoogleQA(page, paaSelector);
+    } else if (engine === 'bing') {
+      expandAndScrape = await extractBingQA(page, paaSelector);
+    } else if (engine === 'duckduckgo') {
+      expandAndScrape = await extractDuckDuckGoQA(page, paaSelector);
     } else {
-      console.warn(`⚠️ [Scrapper] No related questions found or took too long to load.`);
+      expandAndScrape = [];
+    }
+
+    // Get page title and first heading for context
+    const pageTitle = query;
+    const firstHeading = await page.evaluate(() => {
+      const h3 = document.querySelector('h3');
+      return h3 ? h3.innerText : '';
+    });
+
+    // Format headings: first letter uppercase, rest lowercase
+    function formatHeading(str) {
+      if (!str) return '';
+      // Remove leading/trailing whitespace and collapse spaces
+      str = str.trim().replace(/\s+/g, ' ');
+      // Capitalize first letter, rest lowercase
+      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    }
+    // Helper to check if a string is just a number or generic word
+    function isGenericQuestion(q) {
+      if (!q) return true;
+      const generic = ['top', 'tech', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+      return generic.includes(q.trim().toLowerCase()) || /^\d+$/.test(q.trim());
+    }
+    // Helper to check if answer starts with a date (e.g., 'Apr 22, 2025 ·')
+    function answerStartsWithDate(ans) {
+      return /^([A-Z][a-z]{2,8} \d{1,2}, \d{4} · )/.test(ans.trim());
+    }
+    if (Array.isArray(expandAndScrape)) {
+      expandAndScrape = expandAndScrape
+        .filter(item => !isGenericQuestion(item.question) && item.answer && !answerStartsWithDate(item.answer))
+        .map(item => ({
+          ...item,
+          question: formatHeading(item.question)
+        }));
+    }
+
+    // Instead of formatting here, just return the raw Q/A and meta
+    const formattedResult = {
+      query,
+      engine,
+      title: pageTitle, // Only use the page title, never include engine in the title
+      firstHeading,
+      qa: expandAndScrape,
+      keywords: [query],
+      links: expandAndScrape
+        .map(item => (item.answer.match(/https?:\/\/[\w\.-]+[\w\/-]+/g) || []))
+        .flat(),
+      debug: {
+        searchUrl,
+        totalPairs: expandAndScrape.length,
+        timestamp: new Date().toISOString(),
+      },
+    };
+    console.log(`✅ [Scrapper] Scrape complete. Total Q/A pairs: ${expandAndScrape.length}`);
+
+    // If options.prepareForPublishing is true, return formatted for publishing
+    if (options.prepareForPublishing) {
+      return prepareBlogFromScrapper({
+        scrapperResult: formattedResult,
+        targetKeyword: options.targetKeyword || query,
+        targetLink: options.targetLink || '',
+        conclusion: options.conclusion || '',
+        featuredImage: options.featuredImage || '',
+        tags: options.tags || [],
+        extra: options.extra || {},
+      });
+    }
+
+    return formattedResult;
+  } catch (err) {
+    console.error('Error in scrapeWithPuppeteer:', err);
+    throw err;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error('Error closing Puppeteer browser:', e);
+      }
+      if (lastBrowser === browser) lastBrowser = null;
     }
   }
-
-  // Extract Q/A pairs (generic for all engines, but Yahoo needs special handling)
-  let expandAndScrape;
-  if (engine === 'yahoo') {
-    expandAndScrape = await extractYahooQA(page);
-  } else if (engine === 'google') {
-    expandAndScrape = await extractGoogleQA(page, paaSelector);
-  } else if (engine === 'bing') {
-    expandAndScrape = await extractBingQA(page, paaSelector);
-  } else if (engine === 'duckduckgo') {
-    expandAndScrape = await extractDuckDuckGoQA(page, paaSelector);
-  } else {
-    expandAndScrape = [];
-  }
-
-  // Get page title and first heading for context
-  const pageTitle = query;
-  const firstHeading = await page.evaluate(() => {
-    const h3 = document.querySelector('h3');
-    return h3 ? h3.innerText : '';
-  });
-
-  await browser.close();
-
-  // Format headings: first letter uppercase, rest lowercase
-  function formatHeading(str) {
-    if (!str) return '';
-    // Remove leading/trailing whitespace and collapse spaces
-    str = str.trim().replace(/\s+/g, ' ');
-    // Capitalize first letter, rest lowercase
-    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-  }
-  // Helper to check if a string is just a number or generic word
-  function isGenericQuestion(q) {
-    if (!q) return true;
-    const generic = ['top', 'tech', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
-    return generic.includes(q.trim().toLowerCase()) || /^\d+$/.test(q.trim());
-  }
-  // Helper to check if answer starts with a date (e.g., 'Apr 22, 2025 ·')
-  function answerStartsWithDate(ans) {
-    return /^([A-Z][a-z]{2,8} \d{1,2}, \d{4} · )/.test(ans.trim());
-  }
-  if (Array.isArray(expandAndScrape)) {
-    expandAndScrape = expandAndScrape
-      .filter(item => !isGenericQuestion(item.question) && item.answer && !answerStartsWithDate(item.answer))
-      .map(item => ({
-        ...item,
-        question: formatHeading(item.question)
-      }));
-  }
-
-  // Instead of formatting here, just return the raw Q/A and meta
-  const formattedResult = {
-    query,
-    engine,
-    title: pageTitle, // Only use the page title, never include engine in the title
-    firstHeading,
-    qa: expandAndScrape,
-    keywords: [query],
-    links: expandAndScrape
-      .map(item => (item.answer.match(/https?:\/\/[\w\.-]+[\w\/-]+/g) || []))
-      .flat(),
-    debug: {
-      searchUrl,
-      totalPairs: expandAndScrape.length,
-      timestamp: new Date().toISOString(),
-    },
-  };
-  console.log(`✅ [Scrapper] Scrape complete. Total Q/A pairs: ${expandAndScrape.length}`);
-
-  // If options.prepareForPublishing is true, return formatted for publishing
-  if (options.prepareForPublishing) {
-    return prepareBlogFromScrapper({
-      scrapperResult: formattedResult,
-      targetKeyword: options.targetKeyword || query,
-      targetLink: options.targetLink || '',
-      conclusion: options.conclusion || '',
-      featuredImage: options.featuredImage || '',
-      tags: options.tags || [],
-      extra: options.extra || {},
-    });
-  }
-
-  return formattedResult;
 }
 
-// Removed Express app and route logic for modularization
+// Export a cleanup function for global exit handling
+export async function closeLastBrowser() {
+  if (lastBrowser) {
+    try {
+      await lastBrowser.close();
+      lastBrowser = null;
+      console.log('✅ [Global] Puppeteer browser closed on exit.');
+    } catch (e) {
+      console.error('Error closing Puppeteer browser on exit:', e);
+    }
+  }
+}
+
+// For heavy workloads, consider using a job queue (BullMQ, Agenda) or puppeteer-cluster for concurrency control.
+// npm install puppeteer-cluster
+// See: https://github.com/thomasdondorf/puppeteer-cluster

@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Install Redis
+RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
@@ -40,10 +43,20 @@ RUN npx puppeteer browsers install chrome
 COPY prisma ./prisma/
 RUN npx prisma generate --no-engine
 
-# Copy your app code
+# Use production NODE_ENV
+ENV NODE_ENV=production
+
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Remove dev dependencies and cache
+RUN npm cache clean --force && rm -rf /root/.npm
+
+# Copy only necessary files for production
 COPY . .
 
+# Expose app port
 EXPOSE 5000
 
-# Start the app
-CMD ["npm", "start"]
+# Start Redis in the background, then start the app
+CMD service redis-server start && npm start

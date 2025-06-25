@@ -1,16 +1,9 @@
 import prisma from '../database.js';
-import fs from 'fs';
-import { generateBlogJSON } from '../../models/AI/openai-content-mo-four.js';
-import { publishToWordPress } from '../../publisher/wp-publisher.js';
 import express from 'express';
 import { getAllKeywords } from '../database.js';
-import { generateAndPublishService } from '../services/blogGeneratorService.js';
+import { addBlogJob } from '../jobQueue.js';
 
 const router = express.Router();
-
-const ensureDir = (dir) => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-};
 
 // Consolidated generateAndPublish (used by both scheduler and API)
 export async function generateAndPublish(req, res) {
@@ -25,9 +18,9 @@ export async function generateAndPublish(req, res) {
       contentSource: req.body.contentSource || 'openai',
       engine: req.body.engine || undefined,
     };
-    // Call service with parsed config
-    const result = await generateAndPublishService(parsedConfig);
-    res.status(200).json({ success: true, ...result });
+    // Instead of calling the service directly, add to job queue
+    await addBlogJob(parsedConfig);
+    res.status(202).json({ success: true, message: 'Job queued for processing.' });
   } catch (err) {
     console.error('❌ Error in generateAndPublish:', err.message);
     res.status(500).json({ success: false, error: err.message });
