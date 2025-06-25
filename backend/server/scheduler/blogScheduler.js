@@ -16,8 +16,6 @@ export function startBlogScheduler() {
     try {
       const now = new Date();
       // Only fetch configs where hasRun is false
-      // Example: If running scheduler per user, fetch configs like this:
-      // const configs = await prisma.blogConfig.findMany({ where: { userId, hasRun: false, ... } });
       const configs = await prisma.blogConfig.findMany({
         where: {
           hasRun: false,
@@ -72,6 +70,7 @@ export function startBlogScheduler() {
         }
 
         // --- Keyword Publishing Logic ---
+        // Only publish one keyword per interval
         const unpublishedKeywords = await prisma.keyword.findMany({ where: { published: false } });
         const allKeywords = await prisma.keyword.findMany();
         if (unpublishedKeywords.length === 0) {
@@ -101,9 +100,10 @@ export function startBlogScheduler() {
             }
           } catch {}
         }
+        // Only publish one keyword per interval
         if (exhaustAllKeywords) {
-          keywordsToPublish = unpublishedKeywords.map(k => k.keyword);
-          keywordsToMarkPublished = [...keywordsToPublish];
+          keywordsToPublish = [unpublishedKeywords[0].keyword];
+          keywordsToMarkPublished = [unpublishedKeywords[0].keyword];
         } else {
           keywordsToPublish = [unpublishedKeywords[0].keyword];
           keywordsToMarkPublished = [unpublishedKeywords[0].keyword];
@@ -144,6 +144,7 @@ export function startBlogScheduler() {
             let startSiteIndex = (typeof config.lastSiteIndex === 'number' && siteCount > 0)
               ? (config.lastSiteIndex + 1) % siteCount
               : 0;
+            // Only publish one keyword per interval
             for (let i = 0; i < keywordsToPublish.length; i++) {
               const keyword = keywordsToPublish[i];
               let link = '';
@@ -192,6 +193,8 @@ export function startBlogScheduler() {
 
               await prisma.siteConfig.updateMany({ where: { url: site.url, username: site.username }, data: { publishingAvailable: false } });
               await prisma.blogConfig.update({ where: { id: config.id }, data: { lastSiteIndex: siteIndex } });
+              // Strictly update lastPublishedAt after each publish
+              await prisma.blogConfig.update({ where: { id: config.id }, data: { lastPublishedAt: new Date() } });
             }
             // Only mark as published if config.keywords is not set (i.e., not pre-assigned)
             if (!config.keywords || config.keywords.length === 0) {
@@ -200,7 +203,7 @@ export function startBlogScheduler() {
                 data: { published: true, publishedAt: new Date() }
               });
             }
-            await prisma.blogConfig.update({ where: { id: config.id }, data: { lastPublishedAt: now } });
+            // await prisma.blogConfig.update({ where: { id: config.id }, data: { lastPublishedAt: now } });
             const unpublishedCount = await prisma.keyword.count({ where: { published: false } });
             if (config.scheduleTime) {
               await prisma.blogConfig.update({ where: { id: config.id }, data: { hasRun: true, status: 'finished', finishedAt: new Date(), processingLog } });
