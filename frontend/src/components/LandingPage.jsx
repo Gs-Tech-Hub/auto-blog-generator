@@ -26,6 +26,8 @@ const LandingPage = () => {
         sitesArray = data.siteConfigs.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
       } else if (Array.isArray(data.sites)) {
         sitesArray = data.sites.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
+      } else if (Array.isArray(data.configs)) {
+        sitesArray = data.configs.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
       } else if (Array.isArray(data)) {
         sitesArray = data.filter(site => site && typeof site === 'object' && site.url && site.username && site.userId === user?.id);
       }
