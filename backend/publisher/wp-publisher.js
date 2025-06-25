@@ -145,6 +145,7 @@ export async function publishToWordPress(blog, site) {
       }
     });
     console.log("post Response:", postRes.data);
+    console.log(`✅ [Publisher] Successfully published post titled: "${title}" to site: ${url}`);
     return postRes.data;
   } catch (err) {
     console.error('Error publishing post:', err.response?.data || err.message);

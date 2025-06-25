@@ -34,14 +34,19 @@ export function startBlogScheduler() {
         let shouldRun = false;
 
         // --- Scheduling Logic ---
-        if (config.hasRun) continue;
+        if (config.hasRun) {
+          console.log(`[${new Date().toISOString()}] Skipping config ID: ${config.id} — hasRun=true`);
+          continue;
+        }
         if (config.status === 'running') {
           const interval = config.publishIntervalMinutes || 10;
           const startedAt = config.startedAt ? new Date(config.startedAt) : null;
           const maxStuckMs = interval * 2 * 60000;
-          if (startedAt && (now - startedAt > maxStuckMs)) {
+          if (!startedAt || (now - startedAt > maxStuckMs)) {
+            console.warn(`[${new Date().toISOString()}] BlogConfig ID ${config.id} was stuck in 'running' for over ${maxStuckMs/60000} minutes or startedAt was null. Resetting to 'pending'.`);
             await prisma.blogConfig.update({ where: { id: config.id }, data: { status: 'pending', startedAt: null } });
           } else {
+            console.log(`[${new Date().toISOString()}] Skipping config ID: ${config.id} — status=running, not stuck. startedAt: ${startedAt ? startedAt.toISOString() : 'null'}, now: ${now.toISOString()}, maxStuckMs: ${maxStuckMs}`);
             continue;
           }
         }
@@ -51,22 +56,32 @@ export function startBlogScheduler() {
           if (interval && interval > 0) {
             if (!lastPublished) {
               shouldRun = true;
+              console.log(`[${new Date().toISOString()}] Interval config. No lastPublishedAt, shouldRun: true`);
             } else {
               const nextTime = new Date(lastPublished.getTime() + interval * 60000);
+              console.log(`[${new Date().toISOString()}] Interval config. Last published: ${lastPublished.toISOString()}, nextTime: ${nextTime.toISOString()}, now: ${now.toISOString()}`);
               shouldRun = now >= nextTime;
             }
           } else {
             shouldRun = true;
+            console.log(`[${new Date().toISOString()}] Interval config. No interval set, shouldRun: true`);
           }
         } else {
           const hasSchedule = !!config.scheduleTime;
           const scheduledTime = hasSchedule ? new Date(config.scheduleTime) : null;
           if (!hasSchedule) {
             shouldRun = true;
+            console.log(`[${new Date().toISOString()}] Schedule config. No scheduleTime, shouldRun: true`);
           } else if (!isNaN(scheduledTime)) {
             const diff = Math.abs(scheduledTime - now);
             shouldRun = diff < 60 * 1000;
+            console.log(`[${new Date().toISOString()}] Schedule config. scheduleTime: ${scheduledTime?.toISOString()}, now: ${now.toISOString()}, diff(ms): ${diff}, shouldRun: ${shouldRun}`);
           }
+        }
+
+        if (!shouldRun) {
+          console.log(`[${new Date().toISOString()}] Skipping config ID: ${config.id}, status: ${config.status}, hasRun: ${config.hasRun}, shouldRun: ${shouldRun}, interval: ${interval}, lastPublishedAt: ${lastPublished ? lastPublished.toISOString() : 'null'}, scheduleTime: ${config.scheduleTime ? new Date(config.scheduleTime).toISOString() : 'null'}`);
+          continue;
         }
 
         // --- Keyword Publishing Logic ---

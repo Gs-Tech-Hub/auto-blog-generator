@@ -170,6 +170,7 @@ export async function scrapeWithPuppeteer(query, engine = 'google', options = {}
       },
     };
     console.log(`✅ [Scrapper] Scrape complete. Total Q/A pairs: ${expandAndScrape.length}`);
+    console.log(`✅ [Scrapper] Successfully scraped Q/A pairs for query: "${query}" using engine: ${engine}`);
 
     // If options.prepareForPublishing is true, return formatted for publishing
     if (options.prepareForPublishing) {
