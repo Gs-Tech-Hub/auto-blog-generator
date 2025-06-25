@@ -3,10 +3,12 @@ import BlogForm from './BlogForm';
 import SiteConfigModal from './SiteConfigModal';
 import Navigation from './Navigation';
 import SaveKeywordsModal from './SaveKeywordsModal';
+import { useUser } from '../context/UserContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-const LandingPage = ({ user }) => {
+const LandingPage = () => {
+  const { user } = useUser();
   const [siteConfigs, setSiteConfigs] = useState([]);
   const [showSiteConfigModal, setShowSiteConfigModal] = useState(false);
   const [showSaveKeywordsModal, setShowSaveKeywordsModal] = useState(false);
@@ -47,7 +49,7 @@ const LandingPage = ({ user }) => {
 
   useEffect(() => {
     fetchSiteConfigs();
-  }, []);
+  }, [user]);
 
   return (
     <div className="container landing-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>

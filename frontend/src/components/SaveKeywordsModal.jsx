@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useUser } from '../context/UserContext';
 
-const SaveKeywordsModal = ({ isOpen, onClose, selectedSite, apiBase, user }) => {
+const SaveKeywordsModal = ({ isOpen, onClose, selectedSite, apiBase }) => {
+  const { user } = useUser();
   const [keywords, setKeywords] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [loading, setLoading] = useState(false);

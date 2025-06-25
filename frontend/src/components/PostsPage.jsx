@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Navigation from './Navigation';
+import { useUser } from '../context/UserContext';
 
 const PostsPage = () => {
+  const { user } = useUser();
   const [publishedPosts, setPublishedPosts] = useState([]);
   const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
   useEffect(() => {
     const fetchPublishedPosts = async () => {
+      const token = localStorage.getItem('token');
       try {
-        const token = localStorage.getItem('token');
         const res = await fetch(`${API_BASE}/published-posts`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
@@ -20,7 +21,7 @@ const PostsPage = () => {
       }
     };
     fetchPublishedPosts();
-  }, [API_BASE]);
+  }, [API_BASE, user]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -53,7 +54,7 @@ const PostsPage = () => {
                   </a>
                 </p>
                 <p className="text-sm text-gray-500">
-                  Published: {new Date(post.publishedAt).toLocaleDateString()}
+                  Published: {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : '-'}
                 </p>
               </div>
             </div>

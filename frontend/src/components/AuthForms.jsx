@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
+import { useUser } from '../context/UserContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-export function LoginForm({ onLogin }) {
+export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const { setUser } = useUser();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,8 +23,7 @@ export function LoginForm({ onLogin }) {
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem('token', data.token);
-        // Set user object with id and email for consistent downstream use
-        if (onLogin) onLogin({ id: data.user.id, email: data.user.email });
+        setUser({ id: data.user.id, email: data.user.email }, data.token);
       } else {
         setError(data.error || 'Login failed');
       }
@@ -44,7 +45,7 @@ export function LoginForm({ onLogin }) {
   );
 }
 
-export function RegisterForm({ onRegister }) {
+export function RegisterForm() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +53,7 @@ export function RegisterForm({ onRegister }) {
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Registration does not log in user by default, so keep as is
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -66,8 +68,7 @@ export function RegisterForm({ onRegister }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setSuccess('Registration successful! You can now log in.');
-        // Set user object with id and email for consistent downstream use
-        if (onRegister) onRegister({ id: data.user.id, email: data.user.email });
+        // Registration does not log in user by default, so keep as is
       } else {
         setError(data.error || 'Registration failed');
       }

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useUser } from '../context/UserContext';
 
-const BlogForm = ({ user, selectedSites = [], contentSource: initialContentSource = 'openai', engine: initialEngine = 'google' }) => {
+const BlogForm = ({ selectedSites = [], contentSource: initialContentSource = 'openai', engine: initialEngine = 'google' }) => {
+  const { user } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
   const [links, setLinks] = useState('');
@@ -30,22 +32,18 @@ const BlogForm = ({ user, selectedSites = [], contentSource: initialContentSourc
 
   // Fetch number of unpublished keywords for the first selected site
   useEffect(() => {
-    const fetchUnpublishedCount = async () => {
-      if (selectedSites.length > 0) {
-        try {
-          const token = localStorage.getItem('token');
-          const res = await fetch(`${API_BASE}/unpublished-keywords-count?site=${encodeURIComponent(selectedSites[0].url)}`,
-            { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
-          );
-          const data = await res.json();
-          if (data.success) setUnpublishedCount(data.count);
-        } catch {}
-      } else {
-        setUnpublishedCount(0);
-      }
-    };
-    fetchUnpublishedCount();
-  }, [selectedSites, API_BASE]);
+    if (!user) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    // Example: fetch unpublished keywords count for user
+    fetch(`${API_BASE}/unpublished-keywords-count`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setUnpublishedCount(data.count);
+      });
+  }, [API_BASE, user]);
 
   // Fetch all unpublished keywords for in-article selection
   useEffect(() => {

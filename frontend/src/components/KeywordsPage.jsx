@@ -1,13 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import Navigation from './Navigation';
+import { useUser } from '../context/UserContext';
+import { useNavigate } from 'react-router-dom';
 
 const KeywordsPage = () => {
+  const { user } = useUser();
   const [keywords, setKeywords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const API_BASE = import.meta.env.VITE_API_BASE_URL;
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
     const fetchKeywords = async () => {
       setLoading(true);
       setError(null);
@@ -16,6 +24,10 @@ const KeywordsPage = () => {
         const res = await fetch(`${API_BASE}/all-keywords`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
+        if (res.status === 401) {
+          navigate('/login');
+          return;
+        }
         const data = await res.json();
         if (data.success) {
           setKeywords(data.keywords);
@@ -29,7 +41,9 @@ const KeywordsPage = () => {
       }
     };
     fetchKeywords();
-  }, [API_BASE]);
+  }, [API_BASE, user, navigate]);
+
+  if (!user) return null;
 
   return (
     <div className="container items-center mx-auto p-4 content-center">

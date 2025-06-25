@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '../context/UserContext';
+import { useNavigate } from 'react-router-dom';
 
-const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase, user }) => {
+const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase }) => {
+  const { user } = useUser();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (!user && isOpen) {
+      navigate('/login');
+      return;
+    }
     if (isOpen) {
       fetchSites();
     }
-  }, [isOpen]);
+  }, [isOpen, user, navigate]);
 
   const fetchSites = async () => {
     setLoading(true);
@@ -20,6 +28,10 @@ const SiteConfigModal = ({ isOpen, onClose, onSave, apiBase, user }) => {
       const res = await fetch(`${apiBase}/site-configs`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
+      if (res.status === 401) {
+        navigate('/login');
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         // Only show sites for the current user

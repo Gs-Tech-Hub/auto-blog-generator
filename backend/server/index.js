@@ -20,14 +20,15 @@ startBlogScheduler(app);
 
 // Modularized route usage
 app.use('/api/auth', authRoutes);
-app.use('/api', configRoutes);
-app.use('/api', blogRoutes);
 
 // Protect all /api routes except /api/auth/*
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next();
   return requireAuth(req, res, next);
 });
+
+app.use('/api', configRoutes);
+app.use('/api', blogRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
