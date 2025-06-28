@@ -1,3 +1,19 @@
+// Logging utility for consistent timestamps
+const log = (...args) => console.log(`[${new Date().toISOString()}]`, ...args);
+
+// Helper to parse JSON fields or comma-separated strings
+function parseJSONField(field) {
+  if (Array.isArray(field)) return field;
+  if (typeof field === 'string') {
+    try {
+      return JSON.parse(field);
+    } catch {
+      return field.split(',').map(f => f.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 import { webcrypto as crypto } from 'node:crypto';
 if (!globalThis.crypto) {
   globalThis.crypto = crypto;
@@ -7,12 +23,11 @@ import { generateAndPublish } from '../routes/blogController.js';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function startBlogScheduler() {
   cron.schedule('* * * * *', async () => {
     const scanStart = new Date();
-    console.log(`[${scanStart.toISOString()}] 🕒 Scheduler scan started`);
+    log('🕒 Scheduler scan started');
     try {
       const now = new Date();
       // Only fetch configs where hasRun is false
@@ -25,17 +40,17 @@ export function startBlogScheduler() {
           ],
         },
       });
-      console.log(`[${new Date().toISOString()}] Found ${configs.length} configs to process (hasRun: false)`);
+      log(`Found ${configs.length} configs to process (hasRun: false)`);
       for (let index = 0; index < configs.length; index++) {
         const config = configs[index];
-        console.log(`[${new Date().toISOString()}] Processing config ID: ${config.id || `config-${index + 1}`}`);
+        log(`Processing config ID: ${config.id || `config-${index + 1}`}`);
         const configId = config.id || `config-${index + 1}`;
         const exhaustAllKeywords = config.exhaustAllKeywords !== false;
         let shouldRun = false;
 
         // --- Scheduling Logic ---
         if (config.hasRun) {
-          console.log(`[${new Date().toISOString()}] Skipping config ID: ${config.id} — hasRun=true`);
+          log(`Skipping config ID: ${config.id} — hasRun=true`);
           continue;
         }
         if (config.status === 'running') {
@@ -46,7 +61,7 @@ export function startBlogScheduler() {
             console.warn(`[${new Date().toISOString()}] BlogConfig ID ${config.id} was stuck in 'running' for over ${maxStuckMs/60000} minutes or startedAt was null. Resetting to 'pending'.`);
             await prisma.blogConfig.update({ where: { id: config.id }, data: { status: 'pending', startedAt: null } });
           } else {
-            console.log(`[${new Date().toISOString()}] Skipping config ID: ${config.id} — status=running, not stuck. startedAt: ${startedAt ? startedAt.toISOString() : 'null'}, now: ${now.toISOString()}, maxStuckMs: ${maxStuckMs}`);
+            log(`Skipping config ID: ${config.id} — status=running, not stuck. startedAt: ${startedAt ? startedAt.toISOString() : 'null'}, now: ${now.toISOString()}, maxStuckMs: ${maxStuckMs}`);
             continue;
           }
         }
@@ -56,31 +71,31 @@ export function startBlogScheduler() {
           if (interval && interval > 0) {
             if (!lastPublished) {
               shouldRun = true;
-              console.log(`[${new Date().toISOString()}] Interval config. No lastPublishedAt, shouldRun: true`);
+              log(`Interval config. No lastPublishedAt, shouldRun: true`);
             } else {
               const nextTime = new Date(lastPublished.getTime() + interval * 60000);
-              console.log(`[${new Date().toISOString()}] Interval config. Last published: ${lastPublished.toISOString()}, nextTime: ${nextTime.toISOString()}, now: ${now.toISOString()}`);
+              log(`Interval config. Last published: ${lastPublished.toISOString()}, nextTime: ${nextTime.toISOString()}, now: ${now.toISOString()}`);
               shouldRun = now >= nextTime;
             }
           } else {
             shouldRun = true;
-            console.log(`[${new Date().toISOString()}] Interval config. No interval set, shouldRun: true`);
+            log(`Interval config. No interval set, shouldRun: true`);
           }
         } else {
           const hasSchedule = !!config.scheduleTime;
           const scheduledTime = hasSchedule ? new Date(config.scheduleTime) : null;
           if (!hasSchedule) {
             shouldRun = true;
-            console.log(`[${new Date().toISOString()}] Schedule config. No scheduleTime, shouldRun: true`);
+            log(`Schedule config. No scheduleTime, shouldRun: true`);
           } else if (!isNaN(scheduledTime)) {
             const diff = Math.abs(scheduledTime - now);
             shouldRun = diff < 60 * 1000;
-            console.log(`[${new Date().toISOString()}] Schedule config. scheduleTime: ${scheduledTime?.toISOString()}, now: ${now.toISOString()}, diff(ms): ${diff}, shouldRun: ${shouldRun}`);
+            log(`Schedule config. scheduleTime: ${scheduledTime?.toISOString()}, now: ${now.toISOString()}, diff(ms): ${diff}, shouldRun: ${shouldRun}`);
           }
         }
 
         if (!shouldRun) {
-          console.log(`[${new Date().toISOString()}] Skipping config ID: ${config.id}, status: ${config.status}, hasRun: ${config.hasRun}, shouldRun: ${shouldRun}, interval: ${interval}, lastPublishedAt: ${lastPublished ? lastPublished.toISOString() : 'null'}, scheduleTime: ${config.scheduleTime ? new Date(config.scheduleTime).toISOString() : 'null'}`);
+          log(`Skipping config ID: ${config.id}, status: ${config.status}, hasRun: ${config.hasRun}, shouldRun: ${shouldRun}, interval: ${interval}, lastPublishedAt: ${lastPublished ? lastPublished.toISOString() : 'null'}, scheduleTime: ${config.scheduleTime ? new Date(config.scheduleTime).toISOString() : 'null'}`);
           continue;
         }
 
@@ -100,16 +115,7 @@ export function startBlogScheduler() {
         let inArticleKeywords = [];
         if (config.inArticleKeywords) {
           try {
-            let parsed;
-            if (Array.isArray(config.inArticleKeywords)) {
-              parsed = config.inArticleKeywords;
-            } else if (typeof config.inArticleKeywords === 'string') {
-              if (config.inArticleKeywords.trim().startsWith('[')) {
-                parsed = JSON.parse(config.inArticleKeywords);
-              } else {
-                parsed = config.inArticleKeywords.split(',').map(k => k.trim()).filter(Boolean);
-              }
-            }
+            let parsed = parseJSONField(config.inArticleKeywords);
             if (Array.isArray(parsed)) {
               inArticleKeywords = exhaustAllKeywords ? parsed : parsed.slice(0, 3);
             }
@@ -140,10 +146,10 @@ export function startBlogScheduler() {
             // Modularized: Call publishing logic for each keyword/site
             const sanitizedConfig = {
               ...config,
-              sites: typeof config.sites === 'string' ? JSON.parse(config.sites) : config.sites,
-              links: typeof config.links === 'string' ? JSON.parse(config.links) : config.links,
-              tags: typeof config.tags === 'string' ? JSON.parse(config.tags) : config.tags,
-              topics: typeof config.topics === 'string' ? JSON.parse(config.topics) : config.topics,
+              sites: parseJSONField(config.sites),
+              links: parseJSONField(config.links),
+              tags: parseJSONField(config.tags),
+              topics: parseJSONField(config.topics),
               autoTitle: config.autoTitle !== false,
               contentSource: config.contentSource || 'openai',
               engine: config.engine || undefined,
@@ -151,7 +157,11 @@ export function startBlogScheduler() {
             let sites = Array.isArray(sanitizedConfig.sites) ? sanitizedConfig.sites : (sanitizedConfig.sites ? [sanitizedConfig.sites] : []);
             sites = sites.filter(s => s.publishingAvailable !== false);
             if (sites.length === 0) {
-              await prisma.siteConfig.updateMany({ data: { publishingAvailable: true } });
+              // Only reset sites that have been unavailable for >10 minutes
+              await prisma.siteConfig.updateMany({
+                where: { publishingAvailable: false, updatedAt: { lt: new Date(Date.now() - 10 * 60000) } },
+                data: { publishingAvailable: true },
+              });
               sites = Array.isArray(sanitizedConfig.sites) ? sanitizedConfig.sites : (sanitizedConfig.sites ? [sanitizedConfig.sites] : []);
               sites = sites.filter(s => s.publishingAvailable !== false);
             }
@@ -186,35 +196,40 @@ export function startBlogScheduler() {
                 blogConfigId: config.id,
                 links: sanitizedConfig.links || [],
               };
-              await generateAndPublish(
-                { body: payload },
-                {
-                  json: (data) => {
-                    processingLog.push({ timestamp: new Date().toISOString(), event: 'publish', data });
-                  },
-                  status: (code) => ({
-                    json: (payload) => {
-                      processingLog.push({ timestamp: new Date().toISOString(), event: 'status', code, payload });
+              // Per-keyword error handling
+              try {
+                await generateAndPublish(
+                  { body: payload },
+                  {
+                    json: (data) => {
+                      processingLog.push({ timestamp: new Date().toISOString(), event: 'publish', data });
                     },
-                  }),
-                }
-              );
-
-              // Immediately mark this keyword as published before moving to the next
-              await prisma.keyword.updateMany({
-                where: { keyword },
-                data: { published: true, publishedAt: new Date() }
-              });
-
-              await prisma.siteConfig.updateMany({ where: { url: site.url, username: site.username }, data: { publishingAvailable: false } });
-              await prisma.blogConfig.update({ where: { id: config.id }, data: { lastSiteIndex: siteIndex } });
-              // Strictly update lastPublishedAt after each publish
-              await prisma.blogConfig.update({ where: { id: config.id }, data: { lastPublishedAt: new Date() } });
+                    status: (code) => ({
+                      json: (payload) => {
+                        processingLog.push({ timestamp: new Date().toISOString(), event: 'status', code, payload });
+                      },
+                    }),
+                  }
+                );
+                // Immediately mark this keyword as published before moving to the next
+                await prisma.keyword.updateMany({
+                  where: { keyword },
+                  data: { published: true, publishedAt: new Date() }
+                });
+                await prisma.siteConfig.updateMany({ where: { url: site.url, username: site.username }, data: { publishingAvailable: false } });
+                await prisma.blogConfig.update({ where: { id: config.id }, data: { lastSiteIndex: siteIndex } });
+                // Strictly update lastPublishedAt after each publish
+                await prisma.blogConfig.update({ where: { id: config.id }, data: { lastPublishedAt: new Date() } });
+              } catch (err) {
+                processingLog.push({ timestamp: new Date().toISOString(), event: 'error-keyword', keyword, error: err.message });
+                log(`Error publishing keyword '${keyword}':`, err.message);
+              }
             }
             // Only mark as published if config.keywords is not set (i.e., not pre-assigned)
             if (!config.keywords || config.keywords.length === 0) {
+              const uniqueKeywords = [...new Set([...keywordsToPublish, ...inArticleKeywords])];
               await prisma.keyword.updateMany({
-                where: { keyword: { in: keywordsToMarkPublished } },
+                where: { keyword: { in: uniqueKeywords } },
                 data: { published: true, publishedAt: new Date() }
               });
             }
@@ -233,10 +248,10 @@ export function startBlogScheduler() {
           }
         }
       }
-      console.log(`[${new Date().toISOString()}] Scheduler scan finished`);
+      log('Scheduler scan finished');
     } catch (err) {
-      console.error(`[${new Date().toISOString()}] ❌ Scheduler error:`, err.message);
+      log('❌ Scheduler error:', err.message);
     }
   });
-  console.log('🕒 Blog scheduler running every minute...');
+  log('🕒 Blog scheduler running every minute...');
 }
